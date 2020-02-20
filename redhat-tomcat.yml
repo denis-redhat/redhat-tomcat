@@ -1,0 +1,47 @@
+---
+- hosts: localhost
+  connection: local
+  become: yes
+  become_method: sudo
+  become_user: root
+
+  tasks:
+  - name: Make sure Docker is running
+    systemd:
+      state: started
+      name: docker
+
+  - name: Make sur docker lib for python is installed
+    pip:
+      name: docker
+
+  - name: Test if our tomcat application is already running
+    command: py.test
+    register: result
+    ignore_errors: yes
+
+  - meta: end_play
+    when: result.rc == 0
+
+  - name: Build redhat-tomcat Docker image
+    docker_image:
+      name: redhat-tomcat
+      tag: latest
+      build:
+        path: .
+      state: present
+
+  - name: run redhat-tomcat docker container
+    docker_container:
+      name: redhat-tomcat
+      image: redhat-tomcat:latest
+      state: started
+      ports: 8080:8080
+
+#docker container needs few seconds to start:
+  - name: sleep for 10 seconds then continue
+    wait_for:
+      timeout: 10
+
+  - name: Test if our tomcat application is up and running
+    command: py.test
